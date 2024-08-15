@@ -1,95 +1,201 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
 
-export default function Home() {
-  return (
-    <main className={styles.main}>
-      <div className={styles.description}>
-        <p>
-          Get started by editing&nbsp;
-          <code className={styles.code}>src/app/page.tsx</code>
-        </p>
-        <div>
-          <a
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import {
+  Box,
+  Typography,
+  Button,
+  Pagination,
+  Container
+} from '@mui/material';
+import { styled } from '@mui/material/styles';
+import ProductTable from '../components/ProductTable';
+import ProductDialog from '../components/ProductDialog';
+import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog';
 
-      <div className={styles.center}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-      <div className={styles.grid}>
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Docs <span>-&gt;</span>
-          </h2>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Learn <span>-&gt;</span>
-          </h2>
-          <p>Learn about Next.js in an interactive course with&nbsp;quizzes!</p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Templates <span>-&gt;</span>
-          </h2>
-          <p>Explore starter templates for Next.js.</p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Deploy <span>-&gt;</span>
-          </h2>
-          <p>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  );
+interface Product {
+  id: number;
+  name: string;
+  price: string;
+  description: string;
 }
+
+interface ProductsResponse {
+  totalItems: number;
+  items: Product[];
+  totalPages: number;
+  currentPage: number;
+}
+const ContainerStyled = styled(Container)(({ theme }) => ({
+  padding: theme.spacing(3),
+  borderRadius: theme.shape.borderRadius,
+  minHeight: '100vh',
+}));
+const ButtonStyled = styled(Button)(({ theme }) => ({
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: '#e1def9',
+  color: theme.palette.text.primary,
+  '&:hover': {
+    backgroundColor: '#d0c3f0',
+  },
+}));
+
+const ProductsPage = () => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
+  const [newProduct, setNewProduct] = useState<{ name: string; price: string; description: string }>({
+    name: '',
+    price: '',
+    description: ''
+  });
+  const [editProduct, setEditProduct] = useState<{ name: string; price: string; description: string }>({
+    name: '',
+    price: '',
+    description: ''
+  });
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
+  const [page, setPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [pageSize] = useState<number>(5);
+
+  const handleOpenAddDialog = () => setOpenAddDialog(true);
+  const handleCloseAddDialog = () => setOpenAddDialog(false);
+
+  const handleOpenEditDialog = (product: Product) => {
+    setEditProduct({
+      name: product.name,
+      price: product.price,
+      description: product.description,
+    });
+    setCurrentProduct(product);
+    setOpenEditDialog(true);
+  };
+  const handleCloseEditDialog = () => setOpenEditDialog(false);
+
+  const handleOpenDeleteDialog = (id: number) => {
+    setConfirmDeleteId(id);
+    setOpenDeleteDialog(true);
+  };
+  const handleCloseDeleteDialog = () => setOpenDeleteDialog(false);
+
+  useEffect(() => {
+    fetchProducts(page, pageSize);
+  }, [page, pageSize]);
+
+  const fetchProducts = async (page: number, limit: number) => {
+    try {
+      const response = await axios.get<ProductsResponse>(`${API_URL}/products`, {
+        params: { page, limit }
+      });
+      setProducts(response.data.items);
+      setTotalPages(response.data.totalPages);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
+
+  const handleAddProduct = async () => {
+    try {
+      await axios.post(`${API_URL}/products`, newProduct);
+      setOpenAddDialog(false);
+      fetchProducts(page, pageSize);
+    } catch (error) {
+      console.error('Error adding product:', error);
+    }
+  };
+
+  const handleEditProduct = async () => {
+    if (currentProduct) {
+      try {
+        await axios.patch(`${API_URL}/products/${currentProduct.id}`, editProduct);
+        setOpenEditDialog(false);
+        fetchProducts(page, pageSize);
+      } catch (error) {
+        console.error('Error editing product:', error);
+      }
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (confirmDeleteId !== null) {
+      try {
+        await axios.delete(`${API_URL}/products/${confirmDeleteId}`);
+        setOpenDeleteDialog(false);
+        fetchProducts(page, pageSize);
+      } catch (error) {
+        console.error('Error deleting product:', error);
+      }
+    }
+  };
+
+  const handleChangePage = (event: React.ChangeEvent<unknown>, newPage: number) => {
+    setPage(newPage);
+  };
+
+  return (
+    <ContainerStyled maxWidth="lg">
+      <Typography
+        variant="h4"
+        style={{
+          fontFamily: 'Roboto, Arial, sans-serif',
+          fontWeight: 700,
+          fontSize: '2rem',
+          textAlign: 'center',
+          margin: '16px 0',
+          letterSpacing: '0.05em',
+        }}
+      >
+        Produtos
+      </Typography>
+      <Box mb={2}>
+        <ButtonStyled variant="contained" onClick={handleOpenAddDialog}>
+          Adicionar Produto
+        </ButtonStyled>
+      </Box>
+      <ProductTable
+        products={products}
+        onEdit={handleOpenEditDialog}
+        onDelete={handleOpenDeleteDialog}
+      />
+     <Pagination
+      count={totalPages}
+      page={page}
+      onChange={handleChangePage}
+      color="primary"
+      sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}
+    />
+      <ProductDialog
+        open={openAddDialog}
+        onClose={handleCloseAddDialog}
+        product={newProduct}
+        onSave={handleAddProduct}
+        onChange={(e) => setNewProduct({ ...newProduct, [e.target.name]: e.target.value })}
+        title="Adicionar Produto"
+      />
+      {currentProduct && (
+        <ProductDialog
+          open={openEditDialog}
+          onClose={handleCloseEditDialog}
+          product={editProduct}
+          onSave={handleEditProduct}
+          onChange={(e) => setEditProduct({ ...editProduct, [e.target.name]: e.target.value })}
+          title="Editar Produto"
+        />
+      )}
+      <ConfirmDeleteDialog
+        open={openDeleteDialog}
+        onClose={handleCloseDeleteDialog}
+        onConfirm={handleConfirmDelete}
+      />
+    </ContainerStyled>
+  );
+};
+
+export default ProductsPage;
